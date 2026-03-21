@@ -4,6 +4,12 @@ A minimal Windows tray application that detects and suppresses mouse wheel rollb
 
 一个最小的 Windows 托盘应用，用来检测并抑制鼠标滚轮回滚。
 
+大小 200 kb 左右，内存占用 7MB 左右。
+
+<img width="1158" height="807" alt="image" src="https://github.com/user-attachments/assets/b0278c9a-fe7a-466b-9984-be9972b58333" />
+<img width="1158" height="807" alt="image" src="https://github.com/user-attachments/assets/c4a6561a-c7e9-4328-a1e6-4c54ca1c899b" />
+
+
 ## 功能
 
 - 全局监听鼠标滚轮
