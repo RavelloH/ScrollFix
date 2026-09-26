@@ -21,6 +21,13 @@ internal sealed class ScrollWaveformControl : Control
     private bool _captureActive;
     private long _lastTimestampMs;
     private bool _renderingActive;
+    private bool _showCorrectedSeries = true;
+
+    internal void SetShowCorrectedSeries(bool visible)
+    {
+        _showCorrectedSeries = visible;
+        Invalidate();
+    }
 
     public ScrollWaveformControl()
     {
@@ -49,7 +56,17 @@ internal sealed class ScrollWaveformControl : Control
             return;
         }
 
-        AppendSample(activity.ObservedAt.ToUnixTimeMilliseconds(), activity.RawDelta, activity.CorrectedDelta);
+        AppendSample(activity.ObservedAt.ToUnixTimeMilliseconds(), activity.RawDelta, activity.CorrectedDelta, hasCorrectedValue: true);
+    }
+
+    public void AddRawDelta(DateTimeOffset observedAt, int rawDelta)
+    {
+        if (!_captureActive)
+        {
+            return;
+        }
+
+        AppendSample(observedAt.ToUnixTimeMilliseconds(), rawDelta, rawDelta, hasCorrectedValue: false);
     }
 
     public void SetRenderingActive(bool active, int refreshRateHz)
@@ -146,8 +163,21 @@ internal sealed class ScrollWaveformControl : Control
 
         if (_samples.Count > 0)
         {
-            DrawStems(graphics, plotBounds, startMs, nowMs, midY, valueScale, correctedPen, sample => sample.CorrectedDelta, drawOnlyDifference: false);
-            DrawStems(graphics, plotBounds, startMs, nowMs, midY, valueScale, rawPen, sample => sample.RawDelta, drawOnlyDifference: true);
+            if (_showCorrectedSeries)
+            {
+                DrawStems(graphics, plotBounds, startMs, nowMs, midY, valueScale, correctedPen, sample => sample.CorrectedDelta, drawOnlyDifference: false, correctedSeries: true);
+            }
+
+            DrawStems(
+                graphics,
+                plotBounds,
+                startMs,
+                nowMs,
+                midY,
+                valueScale,
+                rawPen,
+                sample => sample.RawDelta,
+                drawOnlyDifference: _showCorrectedSeries);
         }
         else
         {
@@ -164,8 +194,12 @@ internal sealed class ScrollWaveformControl : Control
         float legendX = plotBounds.Left;
         float legendY = surfaceBounds.Top + 10;
         legendX = DrawLegendItem(graphics, rawPen, titleFont, textBrush, legendX, legendY, Strings.Waveform_LegendRaw);
-        legendX += 22F;
-        _ = DrawLegendItem(graphics, correctedPen, titleFont, textBrush, legendX, legendY, Strings.Waveform_LegendCorrected);
+
+        if (_showCorrectedSeries)
+        {
+            legendX += 22F;
+            _ = DrawLegendItem(graphics, correctedPen, titleFont, textBrush, legendX, legendY, Strings.Waveform_LegendCorrected);
+        }
 
         string yAxisLabel = Strings.Waveform_YAxisLabel;
         SizeF yAxisLabelSize = graphics.MeasureString(yAxisLabel, Font);
@@ -189,14 +223,14 @@ internal sealed class ScrollWaveformControl : Control
         Invalidate();
     }
 
-    private void AppendSample(long timestampMs, int rawDelta, int correctedDelta)
+    private void AppendSample(long timestampMs, int rawDelta, int correctedDelta, bool hasCorrectedValue)
     {
         if (_lastTimestampMs != 0 && timestampMs <= _lastTimestampMs)
         {
             timestampMs = _lastTimestampMs + 1;
         }
 
-        _samples.Enqueue(new WaveformSample(timestampMs, rawDelta, correctedDelta));
+        _samples.Enqueue(new WaveformSample(timestampMs, rawDelta, correctedDelta, hasCorrectedValue));
         _lastTimestampMs = timestampMs;
         TrimSamples(timestampMs);
 
@@ -240,7 +274,8 @@ internal sealed class ScrollWaveformControl : Control
         float valueScale,
         Pen pen,
         Func<WaveformSample, int> selector,
-        bool drawOnlyDifference)
+        bool drawOnlyDifference,
+        bool correctedSeries = false)
     {
         if (_samples.Count == 0)
         {
@@ -249,6 +284,11 @@ internal sealed class ScrollWaveformControl : Control
 
         foreach (WaveformSample sample in _samples)
         {
+            if (correctedSeries && !sample.HasCorrectedValue)
+            {
+                continue;
+            }
+
             if (drawOnlyDifference && Math.Abs(sample.RawDelta - sample.CorrectedDelta) < DifferenceThreshold)
             {
                 continue;
@@ -325,5 +365,6 @@ internal sealed class ScrollWaveformControl : Control
     private readonly record struct WaveformSample(
         long TimestampMs,
         int RawDelta,
-        int CorrectedDelta);
+        int CorrectedDelta,
+        bool HasCorrectedValue);
 }

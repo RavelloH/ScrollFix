@@ -43,7 +43,9 @@ internal sealed class DashboardClientContext : ApplicationContext
                 Kind = "set_filter",
                 ReverseWindowMs = settings.ReverseWindowMs,
                 ResetWindowMs = settings.ResetWindowMs,
-                MaxRollbackTicks = settings.MaxRollbackTicks
+                MaxRollbackTicks = settings.MaxRollbackTicks,
+                QuickReverseMs = settings.QuickReverseMs,
+                IntentionalReverseMs = settings.IntentionalReverseMs
             }),
             chartStreamingChanged: active => Send(new DashboardIpcMessage
             {

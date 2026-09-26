@@ -41,14 +41,35 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 
 ## 判定规则
 
-当前实现把“回滚”定义为：
+当前实现会结合最近的滚动方向趋势判断小幅反向事件。遇到疑似回滚时会先拦截；如果随后回到原方向，就继续沿用原方向；如果反向连续出现 3 次，则从第 3 次起接受新方向。这样可以过滤短暂的方向翻转，同时仍允许用户换向。
 
-- 在最近一次正常滚轮事件后的默认 120ms 内
-- 出现最多 2 个刻度的反方向滚动
+当前检测阈值包括：
 
-这些阈值可以在控制面板里实时调整。
+- 最近一次正常事件后的默认 45ms 内出现最多 2 个刻度的反方向滚动
+- 或者在默认 120ms 判定窗口内，至少 2 个同向事件累计形成至少 3 个刻度的趋势
+- 或者在默认 500ms 重置窗口内，至少 3 个同向事件累计形成至少 3 个刻度的趋势
+
+时间和最大反向刻度阈值可以在控制面板里实时调整。短时间连续换向时，前两次反向事件可能会被拦截；间隔超过默认 180ms 的反向事件会直接接受。
 
 ## 配置存储
 
 - 抑制开关：`%LOCALAPPDATA%\ScrollFix\settings.json`
 - 开机自启动：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ScrollFix`
+
+## 滚轮事件捕捉（ScrollCapture）
+
+仓库还包含一个独立的 Windows 捕捉工具，可手动开始/停止记录原始鼠标滚轮事件，并显示与主程序相同样式的最近 10 秒垂直滚轮 delta 波形图。界面会显示当前会话累计事件数、垂直/水平事件数、最近 10 秒垂直事件数，以及写入队列丢失数。
+
+测试滚轮时关闭 ScrollFix 主程序，然后运行：
+
+```powershell
+dotnet run --project ScrollCapture/ScrollCapture.csproj
+```
+
+捕捉文件以 JSON Lines 格式写入 `%LOCALAPPDATA%\ScrollFix\Captures`，每行是一条独立 JSON 记录。事件包含 UTC 时间、高精度会话内时间、滚轮轴和原始 delta、鼠标坐标、注入标记，以及前台窗口标题和进程 ID。该工具只记录垂直/水平滚轮消息，不记录键盘、鼠标移动或按键。
+
+构建捕捉工具：
+
+```powershell
+dotnet build ScrollCapture/ScrollCapture.csproj
+```

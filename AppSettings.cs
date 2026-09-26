@@ -10,9 +10,18 @@ internal sealed class AppSettings
 
     public int MaxRollbackTicks { get; set; } = WheelRollbackFilter.DefaultMaxRollbackTicks;
 
+    public uint QuickReverseMs { get; set; } = WheelRollbackFilter.DefaultQuickReverseMs;
+
+    public uint IntentionalReverseMs { get; set; } = WheelRollbackFilter.DefaultIntentionalReverseMs;
+
     public RollbackFilterSettings GetRollbackFilterSettings()
     {
-        return new RollbackFilterSettings(ReverseWindowMs, ResetWindowMs, MaxRollbackTicks).Normalize();
+        return new RollbackFilterSettings(
+            ReverseWindowMs,
+            ResetWindowMs,
+            MaxRollbackTicks,
+            QuickReverseMs,
+            IntentionalReverseMs).Normalize();
     }
 
     public void ApplyRollbackFilterSettings(RollbackFilterSettings settings)
@@ -21,5 +30,7 @@ internal sealed class AppSettings
         ReverseWindowMs = normalized.ReverseWindowMs;
         ResetWindowMs = normalized.ResetWindowMs;
         MaxRollbackTicks = normalized.MaxRollbackTicks;
+        QuickReverseMs = normalized.QuickReverseMs;
+        IntentionalReverseMs = normalized.IntentionalReverseMs;
     }
 }

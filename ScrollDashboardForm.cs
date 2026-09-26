@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace ScrollFix;
 
@@ -19,6 +20,8 @@ internal sealed class ScrollDashboardForm : Form
     private NumericUpDown _reverseWindowInput = null!;
     private NumericUpDown _resetWindowInput = null!;
     private NumericUpDown _maxRollbackTicksInput = null!;
+    private NumericUpDown _quickReverseInput = null!;
+    private NumericUpDown _intentionalReverseInput = null!;
     private Label _currentStateValue = null!;
     private Label _modeValue = null!;
     private Label _eventCountValue = null!;
@@ -34,6 +37,10 @@ internal sealed class ScrollDashboardForm : Form
     private int _eventCount;
     private int _rollbackCount;
     private DateTimeOffset? _lastRollbackTime;
+
+    private const double LogRetentionSeconds = 10D;
+    private const int MaxLoggedActivities = 4096;
+    private readonly Queue<LoggedActivity> _recentActivities = new();
 
     public ScrollDashboardForm(
         bool suppressionEnabled,
@@ -89,6 +96,7 @@ internal sealed class ScrollDashboardForm : Form
     public void AddWheelActivity(WheelActivityEventArgs activity)
     {
         _waveformControl.AddActivity(activity);
+        AppendLog(activity);
     }
 
     public void ApplySuppressionEnabled(bool enabled)
@@ -115,6 +123,8 @@ internal sealed class ScrollDashboardForm : Form
             _reverseWindowInput.Value = normalized.ReverseWindowMs;
             _resetWindowInput.Value = normalized.ResetWindowMs;
             _maxRollbackTicksInput.Value = normalized.MaxRollbackTicks;
+            _quickReverseInput.Value = normalized.QuickReverseMs;
+            _intentionalReverseInput.Value = normalized.IntentionalReverseMs;
         }
         finally
         {
@@ -213,10 +223,11 @@ internal sealed class ScrollDashboardForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 1,
+            RowCount = 2,
             Padding = new Padding(10)
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
 
         GroupBox waveformGroup = new()
         {
@@ -241,7 +252,24 @@ internal sealed class ScrollDashboardForm : Form
         waveformLayout.Controls.Add(_waveformControl, 0, 0);
         waveformGroup.Controls.Add(waveformLayout);
 
+        FlowLayoutPanel actionBar = new()
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0, 6, 0, 0)
+        };
+
+        Button exportLogButton = new()
+        {
+            AutoSize = true,
+            Text = Strings.Chart_ExportButton
+        };
+        exportLogButton.Click += (_, _) => ExportRecentLog();
+        actionBar.Controls.Add(exportLogButton);
+
         layout.Controls.Add(waveformGroup, 0, 0);
+        layout.Controls.Add(actionBar, 0, 1);
         page.Controls.Add(layout);
         return page;
     }
@@ -354,8 +382,8 @@ internal sealed class ScrollDashboardForm : Form
             RowCount = 2,
             Padding = new Padding(10)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 34F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 66F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         layout.Controls.Add(BuildBasicSettingsGroup(), 0, 0);
         layout.Controls.Add(BuildDetectionSettingsGroup(), 0, 1);
@@ -413,13 +441,13 @@ internal sealed class ScrollDashboardForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 6,
             Padding = new Padding(12)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170F));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 6; i++)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         }
@@ -427,10 +455,14 @@ internal sealed class ScrollDashboardForm : Form
         _reverseWindowInput = CreateNumericInput(20, 500, 10);
         _resetWindowInput = CreateNumericInput(120, 3000, 50);
         _maxRollbackTicksInput = CreateNumericInput(1, 6, 1);
+        _quickReverseInput = CreateNumericInput(10, 200, 5);
+        _intentionalReverseInput = CreateNumericInput(60, 600, 10);
 
         _reverseWindowInput.ValueChanged += FilterInput_ValueChanged;
         _resetWindowInput.ValueChanged += FilterInput_ValueChanged;
         _maxRollbackTicksInput.ValueChanged += FilterInput_ValueChanged;
+        _quickReverseInput.ValueChanged += FilterInput_ValueChanged;
+        _intentionalReverseInput.ValueChanged += FilterInput_ValueChanged;
 
         Button resetDefaultsButton = new()
         {
@@ -446,7 +478,9 @@ internal sealed class ScrollDashboardForm : Form
         AddField(layout, 0, Strings.Settings_ReverseWindow, _reverseWindowInput);
         AddField(layout, 1, Strings.Settings_ResetWindow, _resetWindowInput);
         AddField(layout, 2, Strings.Settings_MaxRollbackTicks, _maxRollbackTicksInput);
-        layout.Controls.Add(resetDefaultsButton, 1, 3);
+        AddField(layout, 3, Strings.Settings_QuickReverse, _quickReverseInput);
+        AddField(layout, 4, Strings.Settings_IntentionalReverse, _intentionalReverseInput);
+        layout.Controls.Add(resetDefaultsButton, 1, 5);
 
         group.Controls.Add(layout);
         return group;
@@ -640,7 +674,9 @@ internal sealed class ScrollDashboardForm : Form
         RollbackFilterSettings settings = new(
             (uint)_reverseWindowInput.Value,
             (uint)_resetWindowInput.Value,
-            (int)_maxRollbackTicksInput.Value);
+            (int)_maxRollbackTicksInput.Value,
+            (uint)_quickReverseInput.Value,
+            (uint)_intentionalReverseInput.Value);
 
         _filterSettingsChanged(settings.Normalize());
         RefreshStatusLabels();
@@ -664,7 +700,12 @@ internal sealed class ScrollDashboardForm : Form
         _errorRateValue.Text = _eventCount == 0
             ? "0.00%"
             : $"{(double)_rollbackCount / _eventCount:P2}";
-        _filterValue.Text = Strings.Status_FilterSummary(_reverseWindowInput.Value, _resetWindowInput.Value, _maxRollbackTicksInput.Value);
+        _filterValue.Text = Strings.Status_FilterSummary(
+            _reverseWindowInput.Value,
+            _resetWindowInput.Value,
+            _maxRollbackTicksInput.Value,
+            _quickReverseInput.Value,
+            _intentionalReverseInput.Value);
 
         _footerStatusLabel.Text = recentRollback
             ? Strings.Footer_RollbackActive(_modeValue.Text)
@@ -754,6 +795,107 @@ internal sealed class ScrollDashboardForm : Form
             _syncingUi = false;
         }
     }
+
+    private void AppendLog(WheelActivityEventArgs activity)
+    {
+        long timestampMs = activity.ObservedAt.ToUnixTimeMilliseconds();
+        _recentActivities.Enqueue(new LoggedActivity(
+            timestampMs,
+            activity.RawDelta,
+            activity.CorrectedDelta,
+            activity.EffectiveDelta,
+            activity.IsRollback,
+            activity.WasSuppressed,
+            activity.ElapsedMs));
+        TrimLog(timestampMs);
+
+        while (_recentActivities.Count > MaxLoggedActivities)
+        {
+            _recentActivities.Dequeue();
+        }
+    }
+
+    private void TrimLog(long nowMs)
+    {
+        long cutoffMs = nowMs - (long)Math.Round(LogRetentionSeconds * 1000D);
+
+        while (_recentActivities.Count > 0 && _recentActivities.Peek().TimestampMs < cutoffMs)
+        {
+            _recentActivities.Dequeue();
+        }
+    }
+
+    private void ExportRecentLog()
+    {
+        long nowMs = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        TrimLog(nowMs);
+
+        if (_recentActivities.Count == 0)
+        {
+            MessageBox.Show(
+                Strings.Export_Empty,
+                AppInfo.Name,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        StringBuilder sb = new();
+        sb.AppendLine(Strings.Export_HeaderTitle(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff")));
+        sb.AppendLine(Strings.Export_HeaderFilter(
+            _reverseWindowInput.Value,
+            _resetWindowInput.Value,
+            _maxRollbackTicksInput.Value,
+            _quickReverseInput.Value,
+            _intentionalReverseInput.Value));
+        sb.AppendLine(Strings.Export_HeaderSuppression(_suppressionEnabled));
+        sb.AppendLine(Strings.Export_HeaderCounts(_eventCount, _rollbackCount));
+        sb.AppendLine(Strings.Export_HeaderColumns);
+
+        foreach (LoggedActivity entry in _recentActivities)
+        {
+            long relMs = entry.TimestampMs - nowMs;
+            string absTime = DateTimeOffset.FromUnixTimeMilliseconds(entry.TimestampMs)
+                .LocalDateTime.ToString("HH:mm:ss.fff");
+
+            sb.Append(relMs).Append(',')
+                .Append(absTime).Append(',')
+                .Append(entry.RawDelta).Append(',')
+                .Append(entry.CorrectedDelta).Append(',')
+                .Append(entry.EffectiveDelta).Append(',')
+                .Append(entry.IsRollback ? '1' : '0').Append(',')
+                .Append(entry.WasSuppressed ? '1' : '0').Append(',')
+                .Append(entry.ElapsedMs)
+                .AppendLine();
+        }
+
+        try
+        {
+            Clipboard.SetText(sb.ToString());
+            MessageBox.Show(
+                Strings.Export_Success(_recentActivities.Count),
+                AppInfo.Name,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                Strings.Export_Failed(exception.Message),
+                AppInfo.Name,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
+    private readonly record struct LoggedActivity(
+        long TimestampMs,
+        int RawDelta,
+        int CorrectedDelta,
+        int EffectiveDelta,
+        bool IsRollback,
+        bool WasSuppressed,
+        uint ElapsedMs);
 
     private static void AddField(TableLayoutPanel layout, int row, string labelText, Control valueControl)
     {

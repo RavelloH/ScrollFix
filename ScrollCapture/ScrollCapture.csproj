@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -6,10 +6,12 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ScrollFix</RootNamespace>
+    <AssemblyName>ScrollCapture</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="ScrollCapture\**\*.cs" />
+    <Compile Include="..\ScrollWaveformControl.cs" Link="ScrollWaveformControl.cs" />
   </ItemGroup>
 
 </Project>

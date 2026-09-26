@@ -84,9 +84,9 @@ internal static class Strings
     public static string Status_ModeSuppress => L("监控并抑制", "Monitor & Suppress");
     public static string Status_ModeDetectOnly => L("仅监控，不抑制", "Monitor only");
 
-    public static string Status_FilterSummary(decimal reverseMs, decimal resetMs, decimal maxTicks) => L(
-        $"{reverseMs}ms / {resetMs}ms / {maxTicks} 刻度",
-        $"{reverseMs}ms / {resetMs}ms / {maxTicks} ticks");
+    public static string Status_FilterSummary(decimal reverseMs, decimal resetMs, decimal maxTicks, decimal quickMs, decimal intentionalMs) => L(
+        $"反向 {reverseMs}ms · 会话 {resetMs}ms · 最多 {maxTicks} 刻度 · 快速 {quickMs}ms · 主动 {intentionalMs}ms",
+        $"reverse {reverseMs}ms · reset {resetMs}ms · max {maxTicks} ticks · quick {quickMs}ms · intentional {intentionalMs}ms");
 
     public static string Footer_RollbackActive(string mode) => L(
         $"最近检测到回滚，当前模式：{mode}",
@@ -107,6 +107,8 @@ internal static class Strings
     public static string Settings_ReverseWindow => L("反向判定窗口", "Reverse Window");
     public static string Settings_ResetWindow => L("会话重置窗口", "Reset Window");
     public static string Settings_MaxRollbackTicks => L("最大回滚刻度", "Max Rollback Ticks");
+    public static string Settings_QuickReverse => L("快速回滚阈值", "Quick Reverse Threshold");
+    public static string Settings_IntentionalReverse => L("主动反向阈值", "Intentional Reverse Threshold");
     public static string Settings_ResetDefaults => L("恢复默认", "Reset Defaults");
 
     public static string About_InfoGroup => L("项目信息", "Project Info");
@@ -135,6 +137,43 @@ internal static class Strings
     public static string Waveform_YAxisLabel => L("Y 轴：deltaY", "Y-axis: deltaY");
     public static string Waveform_TimeAgo(double seconds) => L($"{seconds:0}s 前", $"{seconds:0}s ago");
     public static string Waveform_TimeNow => L("现在", "Now");
+
+    public static string Chart_ExportButton => L("导出最近日志", "Export Recent Log");
+
+    public static string Export_HeaderTitle(string time) => L(
+        $"# ScrollFix 日志导出 @ {time}",
+        $"# ScrollFix log export @ {time}");
+
+    public static string Export_HeaderFilter(
+        decimal reverseMs,
+        decimal resetMs,
+        decimal maxTicks,
+        decimal quickMs,
+        decimal intentionalMs) => L(
+        $"# 过滤参数: reverse={reverseMs}ms reset={resetMs}ms maxTicks={maxTicks} quick={quickMs}ms intentional={intentionalMs}ms",
+        $"# Filter: reverse={reverseMs}ms reset={resetMs}ms maxTicks={maxTicks} quick={quickMs}ms intentional={intentionalMs}ms");
+
+    public static string Export_HeaderSuppression(bool enabled) => L(
+        $"# 抑制开关: {(enabled ? "开" : "关")}",
+        $"# Suppression: {(enabled ? "ON" : "OFF")}");
+
+    public static string Export_HeaderCounts(int events, int rollbacks) => L(
+        $"# 累计事件: {events}  累计回滚: {rollbacks}",
+        $"# Total events: {events}  Total rollbacks: {rollbacks}");
+
+    public static string Export_HeaderColumns => "# columns: rel_ms,abs_time,raw,corrected,effective,is_rollback,was_suppressed,elapsed_ms";
+
+    public static string Export_Success(int count) => L(
+        $"已复制 {count} 条日志到剪切板。",
+        $"Copied {count} log entries to clipboard.");
+
+    public static string Export_Empty => L(
+        "当前没有日志可导出。请切到图表页滚动后再试。",
+        "No log entries to export. Switch to the chart tab and scroll first.");
+
+    public static string Export_Failed(string message) => L(
+        $"导出失败：{message}",
+        $"Export failed: {message}");
 
     // ── MouseWheelHook ──
 

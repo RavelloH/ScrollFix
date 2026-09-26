@@ -448,6 +448,8 @@ internal sealed class DashboardProcessHost : IDisposable
             ReverseWindowMs = snapshot.FilterSettings.ReverseWindowMs,
             ResetWindowMs = snapshot.FilterSettings.ResetWindowMs,
             MaxRollbackTicks = snapshot.FilterSettings.MaxRollbackTicks,
+            QuickReverseMs = snapshot.FilterSettings.QuickReverseMs,
+            IntentionalReverseMs = snapshot.FilterSettings.IntentionalReverseMs,
             EventCount = snapshot.EventCount,
             RollbackCount = snapshot.RollbackCount,
             LastRollbackUnixMs = snapshot.LastRollbackTime?.ToUnixTimeMilliseconds()

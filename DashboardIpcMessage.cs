@@ -16,6 +16,10 @@ internal sealed class DashboardIpcMessage
 
     public int? MaxRollbackTicks { get; init; }
 
+    public uint? QuickReverseMs { get; init; }
+
+    public uint? IntentionalReverseMs { get; init; }
+
     public int? EventCount { get; init; }
 
     public int? RollbackCount { get; init; }
@@ -48,7 +52,9 @@ internal sealed class DashboardIpcMessage
         return new RollbackFilterSettings(
             ReverseWindowMs.Value,
             ResetWindowMs.Value,
-            MaxRollbackTicks.Value).Normalize();
+            MaxRollbackTicks.Value,
+            QuickReverseMs ?? WheelRollbackFilter.DefaultQuickReverseMs,
+            IntentionalReverseMs ?? WheelRollbackFilter.DefaultIntentionalReverseMs).Normalize();
     }
 
     public DateTimeOffset? GetLastRollbackTime()
